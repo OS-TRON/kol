@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Чат</title>
+    <style>
+        .chat-container {
+            width: 400px;
+            margin: 20px auto;
+        }
+        #chatMessages {
+            height: 300px;
+            border: 1px solid #ccc;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            padding: 10px;
+        }
+        .message {
+            margin: 5px 0;
+        }
+        .sent {
+            color: blue;
+        }
+        .received {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div id="status"></div>
+        <input type="text" id="usernameInput" placeholder="Ваше имя">
+        <div id="chatMessages"></div>
+        <input type="text" id="messageInput" placeholder="Введите сообщение">
+        <button onclick="sendMessage()">Отправить</button>
+    </div>
+
+    <script>
+        let ws;
+        const statusDiv = document.getElementById('status');
+
+        function connect() {
+            try {
+                ws = new WebSocket('ws://localhost:3000');
+
+                ws.onopen = () => {
+                    console.log('WebSocket подключен');
+                    statusDiv.textContent = 'Подключено';
+                };
+
+                ws.onclose = () => {
+                    console.log('WebSocket отключен');
+                    statusDiv.textContent = 'Отключено. Переподключение...';
+                    setTimeout(connect, 3000);
+                };
+
+                ws.onerror = (error) => {
+                    console.error('WebSocket ошибка:', error);
+                    statusDiv.textContent = 'Ошибка подключения';
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'history') {
+                        data.messages.forEach(msg => {
+                            displayMessage(msg.message, msg.username, false);
+                        });
+                    } else if (data.type === 'message') {
+                        displayMessage(data.message.message, data.message.username, false);
+                    }
+                };
+            } catch (err) {
+                console.error('Ошибка при создании WebSocket:', err);
+            }
+        }
+
+        function displayMessage(text, username, isSent) {
+            const messages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            messageDiv.textContent = `${username}: ${text}`;
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const username = document.getElementById('usernameInput').value.trim() || 'Пользователь';
+            const message = input.value.trim();
+            
+            if (message && ws.readyState === WebSocket.OPEN) {
+                const messageData = {
+                    username: username,
+                    message: message
+                };
+                
+                ws.send(JSON.stringify(messageData));
+                displayMessage(message, username, true);
+                input.value = '';
+            }
+        }
+
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        connect();
+    </script>
+</body>
+</html>
